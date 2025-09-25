@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>London Zones (Voronoi with Roundels)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { height: 100%; width: 100%; }
+    .station-popup { font-family: Arial, sans-serif; font-size: 14px; line-height: 1.4; }
+    .station-popup strong { font-size: 15px; color: #222; }
+    .station-popup .zone { color: #666; }
+    .station-popup .lines { margin-top: 4px; }
+    .station-popup .line-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      margin: 2px 2px 0 0;
+      border-radius: 4px;
+      background: #444;
+      color: #fff;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
+  <script>
+    const map = L.map('map').setView([51.509865, -0.118092], 11);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    const tubeIcon = L.icon({
+      iconUrl: "https://tfl.gov.uk/tfl/common/images/logos/London%20Underground/Roundel/LULRoundel.jpg",
+      iconSize: [30, 25],
+      iconAnchor: [12, 24],
+      popupAnchor: [0, -20]
+    });
+
+    const dlrIcon = L.icon({
+      iconUrl: "https://tfl.gov.uk/tfl/common/images/logos/Docklands%20Light%20Railway/Roundel/DLRRoundel.jpg",
+      iconSize: [30, 25],
+      iconAnchor: [12, 24],
+      popupAnchor: [0, -20]
+    });
+
+    const zoneColors = {
+      "1": "#FF0000",
+      "1+2": "#FF8000",
+      "2": "#FFFF00",
+      "2+3": "#80FF00",
+      "2/3": "#80FF00",
+      "3": "#00FF00",
+      "3+4": "#00FF80",
+      "4": "#00FFFF",
+      "5": "#0080FF",
+      "5+6": "#0000FF",
+      "6": "#8000FF",
+      "6+7": "#FF00FF",
+      "7": "#FF0080",
+      "8": "#FF0040",
+      "9": "#FF0000",
+      "N/A": "#999999"
+    };
+
+    fetch("https://api.tfl.gov.uk/StopPoint/Mode/dlr,tube")
+      .then(res => res.json())
+      .then(data => {
+        const points = [];
+
+        data.stopPoints.forEach(sp => {
+          if (sp.stopType === "NaptanMetroStation" && sp.lat && sp.lon) {
+            const zoneProp = sp.additionalProperties?.find(p => p.key === "Zone");
+            let zone = zoneProp ? zoneProp.value : "N/A";
+            if (zone === "2/3") zone = "2/3";
+
+            let icon = tubeIcon;
+            if (Array.isArray(sp.modes) && sp.modes.includes("dlr")) {
+              icon = dlrIcon;
+            }
+
+            L.marker([sp.lat, sp.lon], { icon })
+              .addTo(map)
+              .bindPopup(`<strong>${sp.commonName}</strong><br>Zone: ${zone}`);
+
+            points.push(turf.point([sp.lon, sp.lat], { zone }));
+          }
+        });
+
+        const fc = turf.featureCollection(points);
+        const bbox = turf.bbox(fc);
+        const voronoiPolygons = turf.voronoi(fc, { bbox });
+
+        if (voronoiPolygons) {
+          voronoiPolygons.features.forEach((poly, idx) => {
+            if (!poly) return;
+
+            const zone = points[idx]?.properties?.zone || "N/A";
+            const color = zoneColors[zone] || "#999999";
+
+            L.geoJSON(poly, {
+              style: {
+                color: null,
+                weight: 0,
+                fillColor: color,
+                fillOpacity: 0.3
+              }
+            }).bindPopup(`<strong>Zone: ${zone}</strong>`).addTo(map);
+          });
+        }
+      })
+      .catch(err => console.error("Error fetching TfL stations", err));
+
+    // Overlay the GLA boundary
+    fetch("https://hub.arcgis.com/api/v3/datasets/595a6b57b122437bbb42eb396e6ff355_17/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
+      .then(res => res.json())
+      .then(data => {
+        L.geoJSON(data, {
+          style: {
+            color: "#000000", // Black border
+            weight: 2,
+            fillOpacity: 0 // Transparent fill
+          }
+        }).addTo(map);
+      })
+      .catch(err => console.error("Error fetching GLA boundary", err));
+  </script>
+</body>
+</html>
