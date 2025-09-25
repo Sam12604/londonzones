@@ -37,6 +37,20 @@
       maxZoom: 19
     }).addTo(map);
 
+    // Overlay the GLA boundary
+    fetch("https://hub.arcgis.com/api/v3/datasets/595a6b57b122437bbb42eb396e6ff355_17/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
+      .then(res => res.json())
+      .then(data => {
+        L.geoJSON(data, {
+          style: {
+            color: "#000000", // Black border
+            weight: 2,
+            fillOpacity: 0 // Transparent fill
+          }
+        }).addTo(map);
+      })
+      .catch(err => console.error("Error fetching GLA boundary", err));
+
     const tubeIcon = L.icon({
       iconUrl: "https://tfl.gov.uk/tfl/common/images/logos/London%20Underground/Roundel/LULRoundel.jpg",
       iconSize: [30, 25],
@@ -117,20 +131,6 @@
         }
       })
       .catch(err => console.error("Error fetching TfL stations", err));
-
-    // Overlay the GLA boundary
-    fetch("https://hub.arcgis.com/api/v3/datasets/595a6b57b122437bbb42eb396e6ff355_17/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
-      .then(res => res.json())
-      .then(data => {
-        L.geoJSON(data, {
-          style: {
-            color: "#000000", // Black border
-            weight: 2,
-            fillOpacity: 0 // Transparent fill
-          }
-        }).addTo(map);
-      })
-      .catch(err => console.error("Error fetching GLA boundary", err));
   </script>
 </body>
 </html>
